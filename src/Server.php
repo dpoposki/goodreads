@@ -149,17 +149,9 @@ class Server extends AbstractServer
      */
     protected function createTemporaryCredentials($body)
     {
-        parse_str($body, $data);
+        $body .= '&oauth_callback_confirmed=true';
 
-        if (!$data || !is_array($data)) {
-            throw new CredentialsException('Unable to parse temporary credentials response.');
-        }
-
-        $temporaryCredentials = new TemporaryCredentials();
-        $temporaryCredentials->setIdentifier($data['oauth_token']);
-        $temporaryCredentials->setSecret($data['oauth_token_secret']);
-
-        return $temporaryCredentials;
+        return parent::createTemporaryCredentials($body);
     }
 
     /**
