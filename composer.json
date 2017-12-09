@@ -1,0 +1,26 @@
+{
+    "name" : "poposki/goodreads",
+    "description" : "PHP wrapper for Goodreads API",
+    "keywords" : ["goodreads","php","client","wrapper","api"],
+    "homepage" : "https://github.com/dpoposki/goodreads",
+    "license" : "MIT",
+    "authors" : [
+        {
+            "name" : "Darko Poposki",
+            "email" : "poposki.darko@gmail.com",
+            "homepage" : "https://www.darkopoposki.com"
+        }
+    ],
+    "require" : {
+        "php": ">=5.6",
+        "league/oauth1-client": "^1.7"
+    },
+    "require-dev": {
+        "squizlabs/php_codesniffer": "^3.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Poposki\\Goodreads\\": "src/"
+        }
+    }
+}
