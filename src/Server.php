@@ -23,234 +23,301 @@ use League\OAuth1\Client\Signature\SignatureInterface;
  */
 class Server extends AbstractServer
 {
-    const GOODREADS_HOST_URL_SSL = 'https://www.goodreads.com';
+	const GOODREADS_HOST_URL_SSL = 'https://www.goodreads.com';
 
-    /**
-     * @var TokenCredentials|null
-     */
-    protected $tokenCredentials;
+	/**
+	 * @var TokenCredentials|null
+	 */
+	protected $tokenCredentials;
 
-    /**
-     * @param ClientCredentialsInterface|array $clientCredentials
-     * @param SignatureInterface|null $signature
-     */
-    public function __construct($clientCredentials, SignatureInterface $signature = null)
-    {
-        if (is_array($clientCredentials)) {
-            $this->setToken($clientCredentials);
-        }
+	/**
+	 * @param ClientCredentialsInterface|array $clientCredentials
+	 * @param SignatureInterface|null $signature
+	 */
+	public function __construct($clientCredentials, SignatureInterface $signature = null)
+	{
+		if (is_array($clientCredentials)) {
+			$this->setToken($clientCredentials);
+		}
 
-        parent::__construct($clientCredentials, $signature);
-    }
+		parent::__construct($clientCredentials, $signature);
+	}
 
-    /**
-     * @return TokenCredentials|null
-     */
-    public function getToken()
-    {
-        return $this->tokenCredentials;
-    }
+	/**
+	 * @return TokenCredentials|null
+	 */
+	public function getToken()
+	{
+		return $this->tokenCredentials;
+	}
 
-    /**
-     * @param array $clientCredentials
-     */
-    public function setToken(array $clientCredentials)
-    {
-        if (!isset($clientCredentials['oauth_token'], $clientCredentials['oauth_token_secret'])) {
-            return;
-        }
+	/**
+	 * @param array $clientCredentials
+	 */
+	public function setToken(array $clientCredentials)
+	{
+		if (!isset($clientCredentials['oauth_token'], $clientCredentials['oauth_token_secret'])) {
+			return;
+		}
 
-        $tokenCredentials = new TokenCredentials();
-        $tokenCredentials->setIdentifier($clientCredentials['oauth_token']);
-        $tokenCredentials->setSecret($clientCredentials['oauth_token_secret']);
+		$tokenCredentials = new TokenCredentials();
+		$tokenCredentials->setIdentifier($clientCredentials['oauth_token']);
+		$tokenCredentials->setSecret($clientCredentials['oauth_token_secret']);
 
-        $this->tokenCredentials = $tokenCredentials;
-    }
+		$this->tokenCredentials = $tokenCredentials;
+	}
 
-    /**
-     * @param string $method
-     * @param string $path
-     * @param array $parameters
-     * @param bool $authenticate
-     *
-     * @return array
-     * @throws CredentialsException
-     */
-    public function request($method, $path, $parameters = [], $authenticate = false)
-    {
-        $uri = $this->buildEndpointUri($path, $parameters, $authenticate);
+	/**
+	 * @param string $method
+	 * @param string $path
+	 * @param array $parameters
+	 * @param bool $authenticate
+	 *
+	 * @return array
+	 * @throws CredentialsException
+	 */
+	public function request($method, $path, $parameters = [], $authenticate = false)
+	{
+		$uri = $this->buildEndpointUri($path, $parameters, $authenticate);
 
-        $headers = [];
+		$headers = [];
 
-        if ($authenticate) {
-            $headers = $this->getAuthenticationHeaders($method, $uri);
-        }
+		if ($authenticate) {
+			$headers = $this->getAuthenticationHeaders($method, $uri);
+		}
 
-        $response = $this->createHttpClient()->request($method, $uri, ['headers' => $headers]);
+		$response = $this->createHttpClient()->request($method, $uri, ['headers' => $headers]);
 
-        $body = (string) $response->getBody();
+		$body = (string) $response->getBody();
 
-        if ($parameters['format'] == 'json') {
-            return json_decode($body, true);
-        }
+		if ($parameters['format'] == 'json') {
+			return json_decode($body, true);
+		}
 
-        // This magical line is a copy-paste from https://stackoverflow.com/a/20431742/1279092
-        // Do you know of a better way to transform XML to an array? Please make a PR
-        return json_decode(json_encode(simplexml_load_string($body, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
-    }
+		$data=simplexml_load_string($body, 'SimpleXMLElement', LIBXML_NOCDATA);
+		$final=$this->xmlToArray($data);
+		return $final['GoodreadsResponse'];
+	}
 
-    /**
-     * @param string $method
-     * @param string $uri
-     *
-     * @return array
-     * @throws CredentialsException
-     */
-    protected function getAuthenticationHeaders($method, $uri)
-    {
-        if (!$this->tokenCredentials) {
-            throw new CredentialsException('Unable to request the given path because of missing OAuth credentials');
-        }
+	/**
+	 * @param string $method
+	 * @param string $uri
+	 *
+	 * @return array
+	 * @throws CredentialsException
+	 */
+	protected function getAuthenticationHeaders($method, $uri)
+	{
+		if (!$this->tokenCredentials) {
+			throw new CredentialsException('Unable to request the given path because of missing OAuth credentials');
+		}
 
-        return $this->getHeaders($this->tokenCredentials, $method, $uri);
-    }
+		return $this->getHeaders($this->tokenCredentials, $method, $uri);
+	}
 
-    /**
-     * @param string $path
-     * @param array $parameters
-     * @param bool $authenticate
-     *
-     * @return string
-     */
-    protected function buildEndpointUri($path, &$parameters, $authenticate)
-    {
-        $uri = self::GOODREADS_HOST_URL_SSL . '/' . ltrim($path, '/');
+	/**
+	 * @param string $path
+	 * @param array $parameters
+	 * @param bool $authenticate
+	 *
+	 * @return string
+	 */
+	protected function buildEndpointUri($path, &$parameters, $authenticate)
+	{
+		$uri = self::GOODREADS_HOST_URL_SSL . '/' . ltrim($path, '/');
 
-        if (!$authenticate) {
-            $parameters['key'] = $this->clientCredentials->getIdentifier();
-        }
+		if (!$authenticate) {
+			$parameters['key'] = $this->clientCredentials->getIdentifier();
+		}
 
-        if (!isset($parameters['format'])) {
-            $parameters['format'] = 'xml';
-        }
+		if (!isset($parameters['format'])) {
+			$parameters['format'] = 'xml';
+		}
 
-        $uri .= '?' . http_build_query($parameters);
+		$uri .= '?' . http_build_query($parameters);
 
-        return $uri;
-    }
+		return $uri;
+	}
 
-    /**
-     * Creates temporary credentials from the body response.
-     *
-     * @param string $body
-     *
-     * @return TemporaryCredentials
-     * @throws CredentialsException
-     */
-    protected function createTemporaryCredentials($body)
-    {
-        $body .= '&oauth_callback_confirmed=true';
+	/**
+	 * Creates temporary credentials from the body response.
+	 *
+	 * @param string $body
+	 *
+	 * @return TemporaryCredentials
+	 * @throws CredentialsException
+	 */
+	protected function createTemporaryCredentials($body)
+	{
+		$body .= '&oauth_callback_confirmed=true';
 
-        return parent::createTemporaryCredentials($body);
-    }
+		return parent::createTemporaryCredentials($body);
+	}
 
-    /**
-     * Retrieves token credentials by passing in the temporary credentials,
-     * the temporary credentials identifier as passed back by the server
-     *
-     * @param TemporaryCredentials $temporaryCredentials
-     * @param string               $temporaryIdentifier
-     *
-     * @return TokenCredentials
-     * @throws CredentialsException
-     */
-    public function getTokenCredentialsWithoutVerifier(TemporaryCredentials $temporaryCredentials, $temporaryIdentifier)
-    {
-        if ($temporaryIdentifier !== $temporaryCredentials->getIdentifier()) {
-            throw new \InvalidArgumentException(
-                'Temporary identifier passed back by server does not match that of stored temporary credentials.
+	/**
+	 * Retrieves token credentials by passing in the temporary credentials,
+	 * the temporary credentials identifier as passed back by the server
+	 *
+	 * @param TemporaryCredentials $temporaryCredentials
+	 * @param string               $temporaryIdentifier
+	 *
+	 * @return TokenCredentials
+	 * @throws CredentialsException
+	 */
+	public function getTokenCredentialsWithoutVerifier(TemporaryCredentials $temporaryCredentials, $temporaryIdentifier)
+	{
+		if ($temporaryIdentifier !== $temporaryCredentials->getIdentifier()) {
+			throw new \InvalidArgumentException(
+			  'Temporary identifier passed back by server does not match that of stored temporary credentials.
                 Potential man-in-the-middle.'
-            );
-        }
+			);
+		}
 
-        $uri = $this->urlTokenCredentials();
+		$uri = $this->urlTokenCredentials();
 
-        $client = $this->createHttpClient();
+		$client = $this->createHttpClient();
 
-        $headers = $this->getHeaders($temporaryCredentials, 'POST', $uri);
+		$headers = $this->getHeaders($temporaryCredentials, 'POST', $uri);
 
-        try {
-            $response = $client->post($uri, [
-                'headers' => $headers,
-            ]);
-        } catch (BadResponseException $e) {
-            return $this->handleTokenCredentialsBadResponse($e);
-        }
+		try {
+			$response = $client->post($uri, [
+			  'headers' => $headers,
+			]);
+		} catch (BadResponseException $e) {
+			return $this->handleTokenCredentialsBadResponse($e);
+		}
 
-        return $this->createTokenCredentials((string) $response->getBody());
-    }
+		return $this->createTokenCredentials((string) $response->getBody());
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function urlTemporaryCredentials()
-    {
-        return self::GOODREADS_HOST_URL_SSL . '/oauth/request_token';
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function urlTemporaryCredentials()
+	{
+		return self::GOODREADS_HOST_URL_SSL . '/oauth/request_token';
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function urlAuthorization()
-    {
-        return self::GOODREADS_HOST_URL_SSL . '/oauth/authorize';
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function urlAuthorization()
+	{
+		return self::GOODREADS_HOST_URL_SSL . '/oauth/authorize';
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function urlTokenCredentials()
-    {
-        return self::GOODREADS_HOST_URL_SSL . '/oauth/access_token';
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function urlTokenCredentials()
+	{
+		return self::GOODREADS_HOST_URL_SSL . '/oauth/access_token';
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function urlUserDetails()
-    {
-        return '';
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function urlUserDetails()
+	{
+		return '';
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function userDetails($data, TokenCredentials $tokenCredentials)
-    {
-        return new User();
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function userDetails($data, TokenCredentials $tokenCredentials)
+	{
+		return new User();
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function userUid($data, TokenCredentials $tokenCredentials)
-    {
-        return '';
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function userUid($data, TokenCredentials $tokenCredentials)
+	{
+		return '';
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function userEmail($data, TokenCredentials $tokenCredentials)
-    {
-        return '';
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function userEmail($data, TokenCredentials $tokenCredentials)
+	{
+		return '';
+	}
 
-    /**
-     * {@inheritdoc}
-     */
-    public function userScreenName($data, TokenCredentials $tokenCredentials)
-    {
-        return '';
-    }
+	/**
+	 * {@inheritdoc}
+	 */
+	public function userScreenName($data, TokenCredentials $tokenCredentials)
+	{
+		return '';
+	}
+
+	/**
+	 * @param \SimpleXMLElement $xml
+	 * @return array
+	 */
+	private function xmlToArray($xml) {
+		$namespaces     = $xml->getDocNamespaces();
+		$namespaces[''] = null;
+
+		$tagsArray = [];
+		foreach($namespaces as $prefix => $namespace) {
+			foreach($xml->children($namespace) as $childXml) {
+				$childArray = $this->xmlToArray($childXml);
+				[$childTagName, $childProperties] = each($childArray);
+
+				if($prefix) $childTagName = $prefix . ":" . $childTagName;
+
+				if(!isset($tagsArray[$childTagName])) {
+					$tagsArray[$childTagName] = $childProperties;
+				}
+				elseif(
+				  is_array($tagsArray[$childTagName]) && array_keys($tagsArray[$childTagName])
+				                                         ===range(0, count($tagsArray[$childTagName])-1)
+				) {
+					$tagsArray[$childTagName][] = $childProperties;
+				}
+				else {
+					$tagsArray[$childTagName] = [$tagsArray[$childTagName], $childProperties];
+				}
+			}
+		}
+
+		$textContentArray = [];
+		$plainText        = trim((string)$xml);
+		if($plainText!=='') {
+			if(is_numeric($plainText)) {
+				if($this->isInt($plainText)) $plainText = intval($plainText);
+				if($this->isFloat($plainText)) $plainText = floatval($plainText);
+			}
+			$textContentArray['$'] = $plainText;
+		}
+		else {
+			$plainText = NULL;
+		}
+
+		$propertiesArray = $tagsArray || ($plainText==='') ? array_merge($tagsArray, $textContentArray) : $plainText;
+
+		return [
+		  $xml->getName() => $propertiesArray
+		];
+	}
+
+	/**
+	 * @param mixed $value
+	 * @return bool
+	 */
+	private function isInt($value) {
+		return (is_int($value) || ctype_digit($value) || (is_string($value) && $value[0]==='-' && filter_var($value, FILTER_VALIDATE_INT))!==FALSE);
+	}
+
+	/**
+	 * @param mixed $value
+	 * @return bool
+	 */
+	private function isFloat($value) {
+		return is_float($value+0);
+	}
 }
